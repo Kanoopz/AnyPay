@@ -41,3 +41,11 @@ app-example
 # generated native folders
 /ios
 /android
+
+# System files - prevent EAS from scanning outside project
+Library/
+../Library/
+../../Library/
+../../../Library/
+~/
+~/*
