@@ -32,10 +32,10 @@ module.exports = function withHCEResources(config) {
       const aidListPath = path.join(resPath, 'aid_list.xml');
       const aidListContent = `<?xml version="1.0" encoding="utf-8"?>
 <host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
-                   android:description="AnyPay HCE Service"
+                   android:description="@string/app_name"
                    android:requireDeviceUnlock="false">
     <aid-group android:category="other"
-               android:description="AnyPay HCE Service">
+               android:description="@string/app_name">
         <aid-filter android:name="D2760000850101" />
     </aid-group>
 </host-apdu-service>`;
