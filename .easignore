@@ -19,7 +19,7 @@ Library/
 *.csv
 *.html
 *.txt
-*.json
+# Don't ignore *.json - we need package.json and app.json!
 *.zip
 *.plist
 *.duration
