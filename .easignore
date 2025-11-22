@@ -1,8 +1,16 @@
-# Ignore everything outside project directory
+# EAS Build ignore file
+# This prevents EAS from including files outside the project directory
+
+# Ignore everything outside project root
 ../
 
-# Ignore system files and logs
+# System directories (macOS)
 Library/
+**/Library/
+~/
+~/*
+
+# System files
 *.log
 *.diag
 *.ips
@@ -16,24 +24,35 @@ Library/
 *.plist
 *.duration
 
-# Ignore cache directories
+# Cache directories
 **/cache*/
 **/Cache*/
 **/Caches/
 
-# Ignore diagnostic reports
+# Diagnostic reports
 **/DiagnosticReports/
 
-# Ignore application logs
+# Application logs
 **/Logs/
 
-# Ignore node_modules
+# Node modules
 node_modules/
 
-# Ignore build artifacts
+# Build artifacts
 android/
 ios/
 .expo/
 dist/
 web-build/
 
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
