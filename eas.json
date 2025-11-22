@@ -15,6 +15,9 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EAS_BUILD_IGNORE_PATTERNS": "Library/**,**/Library/**,~/**"
       }
     },
     "production": {
