@@ -4,8 +4,10 @@ import HomeScreen from '@/components/home-screen'
 import SendPaymentFlow from '@/components/send-payment-flow'
 import ReceivePaymentFlow from '@/components/receive-payment-flow'
 import ConfigurationScreen from '@/components/configuration-screen'
+import SendDataScreen from '@/components/send-data-screen'
+import ReceiveDataScreen from '@/components/receive-data-screen'
 
-type Screen = 'home' | 'send' | 'receive' | 'config'
+type Screen = 'home' | 'send' | 'receive' | 'config' | 'sendData' | 'receiveData'
 
 export default function Index() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home')
@@ -13,6 +15,8 @@ export default function Index() {
   const handleSendPayment = () => setCurrentScreen('send')
   const handleReceivePayment = () => setCurrentScreen('receive')
   const handleOpenConfig = () => setCurrentScreen('config')
+  const handleSendData = () => setCurrentScreen('sendData')
+  const handleReceiveData = () => setCurrentScreen('receiveData')
   const handleBack = () => setCurrentScreen('home')
 
   return (
@@ -22,11 +26,15 @@ export default function Index() {
           onSendClick={handleSendPayment}
           onReceiveClick={handleReceivePayment}
           onSettingsClick={handleOpenConfig}
+          onSendDataClick={handleSendData}
+          onReceiveDataClick={handleReceiveData}
         />
       )}
       {currentScreen === 'send' && <SendPaymentFlow onBack={handleBack} />}
       {currentScreen === 'receive' && <ReceivePaymentFlow onBack={handleBack} />}
       {currentScreen === 'config' && <ConfigurationScreen onBack={handleBack} />}
+      {currentScreen === 'sendData' && <SendDataScreen onBack={handleBack} />}
+      {currentScreen === 'receiveData' && <ReceiveDataScreen onBack={handleBack} />}
     </View>
   )
 }

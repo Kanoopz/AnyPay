@@ -10,9 +10,11 @@ interface HomeScreenProps {
   onSendClick: () => void
   onReceiveClick: () => void
   onSettingsClick: () => void
+  onSendDataClick: () => void
+  onReceiveDataClick: () => void
 }
 
-export default function HomeScreen({ onSendClick, onReceiveClick, onSettingsClick }: HomeScreenProps) {
+export default function HomeScreen({ onSendClick, onReceiveClick, onSettingsClick, onSendDataClick, onReceiveDataClick }: HomeScreenProps) {
   const insets = useSafeAreaInsets()
   const pulseAnim = React.useRef(new Animated.Value(1)).current
 
@@ -98,6 +100,40 @@ export default function HomeScreen({ onSendClick, onReceiveClick, onSettingsClic
             <View style={styles.actionTextContainer}>
               <Text style={styles.actionTitle}>Receive Payment</Text>
               <Text style={styles.actionSubtitle}>Set amount and wait</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#ffffff" />
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={onSendDataClick}
+          activeOpacity={0.8}
+        >
+          <View style={styles.actionButtonContent}>
+            <View style={styles.actionIconContainer}>
+              <Ionicons name="send" size={24} color="#ffffff" />
+            </View>
+            <View style={styles.actionTextContainer}>
+              <Text style={styles.actionTitle}>Send Data</Text>
+              <Text style={styles.actionSubtitle}>Send string via NFC</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#ffffff" />
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={onReceiveDataClick}
+          activeOpacity={0.8}
+        >
+          <View style={styles.actionButtonContent}>
+            <View style={styles.actionIconContainer}>
+              <Ionicons name="document-text" size={24} color="#ffffff" />
+            </View>
+            <View style={styles.actionTextContainer}>
+              <Text style={styles.actionTitle}>Receive Data</Text>
+              <Text style={styles.actionSubtitle}>Receive string via NFC</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#ffffff" />
           </View>

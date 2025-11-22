@@ -1,9 +1,10 @@
-import React, { useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView } from 'react-native'
+import React, { useState, useEffect } from 'react'
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Platform } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { initNFC, handlePay, stopNfcReading, ParsedData } from '@/services/nfc-service'
 
 interface SendPaymentFlowProps {
   onBack: () => void
@@ -14,11 +15,14 @@ type SendStep = 'waiting_nfc' | 'processing' | 'success'
 export default function SendPaymentFlow({ onBack }: SendPaymentFlowProps) {
   const insets = useSafeAreaInsets()
   const [step, setStep] = useState<SendStep>('waiting_nfc')
-  const [nfcData] = useState({
-    recipient: 'Alice',
-    amount: '50',
-    asset: 'USDC',
-    chain: 'Polygon',
+  const [nfcSupported, setNfcSupported] = useState(false)
+  const [isNfcReading, setIsNfcReading] = useState(false)
+  const [nfcData, setNfcData] = useState({
+    recipient: '',
+    amount: '',
+    asset: '',
+    chain: '',
+    rawData: '',
   })
 
   const pulseAnim = React.useRef(new Animated.Value(1)).current
@@ -67,6 +71,72 @@ export default function SendPaymentFlow({ onBack }: SendPaymentFlowProps) {
     outputRange: ['0deg', '360deg'],
   })
 
+  // Initialize NFC on mount
+  useEffect(() => {
+    const initializeNFC = async () => {
+      if (Platform.OS === 'android') {
+        const supported = await initNFC()
+        setNfcSupported(supported)
+        if (supported && step === 'waiting_nfc') {
+          startNfcReading()
+        }
+      }
+    }
+    initializeNFC()
+
+    return () => {
+      stopNfcReading()
+    }
+  }, [])
+
+  // Start NFC reading when in waiting_nfc step
+  useEffect(() => {
+    if (step === 'waiting_nfc' && nfcSupported && !isNfcReading) {
+      startNfcReading()
+    }
+  }, [step, nfcSupported])
+
+  const startNfcReading = async () => {
+    if (isNfcReading) return
+
+    setIsNfcReading(true)
+    console.log('🔄 Starting NFC reading...')
+
+    handlePay(
+      (data: string, parsedData?: ParsedData) => {
+        console.log('✅ NFC data received:', data)
+        console.log('📝 Parsed data:', parsedData)
+
+        // Update NFC data with received information
+        setNfcData({
+          recipient: parsedData?.address || data.slice(0, 10) + '...',
+          amount: '',
+          asset: parsedData?.desiredToken || '',
+          chain: '',
+          rawData: data,
+        })
+
+        setIsNfcReading(false)
+        // Move to processing step
+        setStep('processing')
+        setTimeout(() => {
+          setStep('success')
+        }, 2000)
+      },
+      (error: string) => {
+        console.error('❌ NFC reading error:', error)
+        setIsNfcReading(false)
+        // Optionally show error to user
+      }
+    )
+  }
+
+  const handleCancel = async () => {
+    await stopNfcReading()
+    setIsNfcReading(false)
+    onBack()
+  }
+
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.backgroundBlur} />
@@ -102,7 +172,7 @@ export default function SendPaymentFlow({ onBack }: SendPaymentFlowProps) {
             </View>
           </View>
 
-          <Button onPress={onBack} style={styles.cancelButton}>
+          <Button onPress={handleCancel} style={styles.cancelButton}>
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </Button>
         </>
@@ -144,35 +214,39 @@ export default function SendPaymentFlow({ onBack }: SendPaymentFlowProps) {
                 <CardContent>
                   <View style={styles.infoGrid}>
                     <View style={styles.infoItem}>
-                      <Text style={styles.infoLabel}>To</Text>
-                      <Text style={styles.infoValue}>{nfcData.recipient}</Text>
+                      <Text style={styles.infoLabel}>Received Data</Text>
+                      <Text style={styles.infoValue}>{nfcData.rawData || 'No data'}</Text>
                     </View>
-                    <View style={styles.infoItem}>
-                      <Text style={styles.infoLabel}>Amount</Text>
-                      <Text style={styles.infoAmount}>
-                        {nfcData.amount} {nfcData.asset}
-                      </Text>
-                    </View>
-                    <View style={styles.infoItem}>
-                      <Text style={styles.infoLabel}>Network</Text>
-                      <Text style={styles.infoValue}>{nfcData.chain}</Text>
-                    </View>
+                    {nfcData.recipient && (
+                      <View style={styles.infoItem}>
+                        <Text style={styles.infoLabel}>Address</Text>
+                        <Text style={styles.infoValue}>{nfcData.recipient}</Text>
+                      </View>
+                    )}
+                    {nfcData.asset && (
+                      <View style={styles.infoItem}>
+                        <Text style={styles.infoLabel}>Token</Text>
+                        <Text style={styles.infoAmount}>{nfcData.asset}</Text>
+                      </View>
+                    )}
                     <View style={styles.infoItem}>
                       <Text style={styles.infoLabel}>Status</Text>
-                      <Text style={styles.infoStatus}>Confirmed</Text>
+                      <Text style={styles.infoStatus}>Received</Text>
                     </View>
                   </View>
 
-                  <View style={styles.hashContainer}>
-                    <Text style={styles.hashLabel}>Transaction Hash</Text>
-                    <Text style={styles.hashValue}>0x7f8a9b3e...c2d4e5f6a8b9c</Text>
-                  </View>
+                  {nfcData.rawData && (
+                    <View style={styles.hashContainer}>
+                      <Text style={styles.hashLabel}>Raw Data</Text>
+                      <Text style={styles.hashValue}>{nfcData.rawData}</Text>
+                    </View>
+                  )}
                 </CardContent>
               </Card>
             </View>
           </View>
 
-          <Button onPress={onBack} style={styles.newTransactionButton}>
+          <Button onPress={handleCancel} style={styles.newTransactionButton}>
             <Text style={styles.newTransactionButtonText}>New Transaction</Text>
           </Button>
         </ScrollView>

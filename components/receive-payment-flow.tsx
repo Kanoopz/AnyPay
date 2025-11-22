@@ -1,10 +1,11 @@
-import React, { useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, ViewStyle } from 'react-native'
+import React, { useState, useEffect } from 'react'
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, ViewStyle, Platform } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { initHCE, handleReceive, stopHceOperation } from '@/services/nfc-service'
 
 interface ReceivePaymentFlowProps {
   onBack: () => void
@@ -17,6 +18,10 @@ export default function ReceivePaymentFlow({ onBack }: ReceivePaymentFlowProps) 
   const [step, setStep] = useState<ReceiveStep>('amount')
   const [amount, setAmount] = useState('')
   const [receiveType] = useState<'crypto' | 'fiat'>('crypto')
+  const [hceSupported, setHceSupported] = useState(false)
+  const [isHceActive, setIsHceActive] = useState(false)
+  const [session, setSession] = useState<any | null>(null)
+  const [dataShared, setDataShared] = useState(false)
 
   const pulseAnim = React.useRef(new Animated.Value(1)).current
   const spinAnim = React.useRef(new Animated.Value(0)).current
@@ -52,15 +57,73 @@ export default function ReceivePaymentFlow({ onBack }: ReceivePaymentFlowProps) 
     }
   }, [step])
 
+  // Initialize HCE on mount
+  useEffect(() => {
+    const initializeHCE = async () => {
+      if (Platform.OS === 'android') {
+        const hceSession = await initHCE()
+        if (hceSession) {
+          setSession(hceSession)
+          setHceSupported(true)
+        }
+      }
+    }
+    initializeHCE()
+
+    return () => {
+      if (session) {
+        stopHceOperation(session)
+      }
+    }
+  }, [])
+
+  // Start HCE when entering waiting_nfc step
+  useEffect(() => {
+    if (step === 'waiting_nfc' && hceSupported && session && !isHceActive) {
+      startHceSharing()
+    }
+  }, [step, hceSupported, session])
+
   const handleConfirmAmount = () => {
     if (!amount) return
     setStep('waiting_nfc')
-    setTimeout(() => {
-      setStep('processing')
-      setTimeout(() => {
-        setStep('success')
-      }, 2500)
-    }, 3000)
+  }
+
+  const startHceSharing = async () => {
+    if (!session || isHceActive) return
+
+    // Create data to share - simple string for now
+    const dataToShare = amount ? `Amount: ${amount}` : 'Ready to receive payment'
+
+    setIsHceActive(true)
+    console.log('🔄 Starting HCE sharing with data:', dataToShare)
+
+    handleReceive(
+      session,
+      dataToShare,
+      () => {
+        console.log('✅ Data shared successfully!')
+        setDataShared(true)
+        setIsHceActive(false)
+        setStep('processing')
+        setTimeout(() => {
+          setStep('success')
+        }, 2000)
+      },
+      (error: string) => {
+        console.error('❌ HCE sharing error:', error)
+        setIsHceActive(false)
+        // Optionally show error to user
+      }
+    )
+  }
+
+  const handleCancel = async () => {
+    if (session) {
+      await stopHceOperation(session)
+    }
+    setIsHceActive(false)
+    onBack()
   }
 
   const spin = spinAnim.interpolate({
@@ -147,7 +210,7 @@ export default function ReceivePaymentFlow({ onBack }: ReceivePaymentFlowProps) 
             </View>
           </View>
 
-          <Button onPress={onBack} style={styles.cancelButton}>
+          <Button onPress={handleCancel} style={styles.cancelButton}>
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </Button>
         </>
@@ -207,7 +270,7 @@ export default function ReceivePaymentFlow({ onBack }: ReceivePaymentFlowProps) 
             </View>
           </View>
 
-          <Button onPress={onBack} style={styles.newTransactionButton}>
+          <Button onPress={handleCancel} style={styles.newTransactionButton}>
             <Text style={styles.newTransactionButtonText}>New Transaction</Text>
           </Button>
         </ScrollView>
