@@ -42,11 +42,19 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "./plugins/with-hce",
+      "./plugins/with-hce-resources"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9cee0a02-dbaf-4777-bd70-12ea96982d65"
+      }
     }
   }
 }
