@@ -1,0 +1,39 @@
+# Ignore everything outside project directory
+../
+
+# Ignore system files and logs
+Library/
+*.log
+*.diag
+*.ips
+*.wbt
+*.zenc
+*.csv
+*.html
+*.txt
+*.json
+*.zip
+*.plist
+*.duration
+
+# Ignore cache directories
+**/cache*/
+**/Cache*/
+**/Caches/
+
+# Ignore diagnostic reports
+**/DiagnosticReports/
+
+# Ignore application logs
+**/Logs/
+
+# Ignore node_modules
+node_modules/
+
+# Ignore build artifacts
+android/
+ios/
+.expo/
+dist/
+web-build/
+
