@@ -24,15 +24,13 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
   const insets = useSafeAreaInsets()
   const [mode, setMode] = useState<ConfigMode>('view')
   const [showSaved, setShowSaved] = useState(false)
-  const [sendChain, setSendChain] = useState('Polygon')
-  const [sendChainId, setSendChainId] = useState('80001')
-  const [sendAsset, setSendAsset] = useState('USDC')
-  const [sendTokenAddress, setSendTokenAddress] = useState('')
+  const [sendChain, setSendChain] = useState('Arbitrum')
+  const [sendChainId, setSendChainId] = useState('421614')
+  const [sendAsset, setSendAsset] = useState('ETH')
   const [receiveType, setReceiveType] = useState<'crypto' | 'fiat'>('crypto')
-  const [receiveChain, setReceiveChain] = useState('Polygon')
-  const [receiveChainId, setReceiveChainId] = useState('80001')
+  const [receiveChain, setReceiveChain] = useState('Optimism')
+  const [receiveChainId, setReceiveChainId] = useState('11155420')
   const [receiveAsset, setReceiveAsset] = useState('USDC')
-  const [receiveTokenAddress, setReceiveTokenAddress] = useState('')
   const [receiveFiat, setReceiveFiat] = useState('USD')
 
   const chains = ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism']
@@ -47,12 +45,10 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
         setSendChain(config.sendChain)
         setSendChainId(config.sendChainId)
         setSendAsset(config.sendToken)
-        setSendTokenAddress(config.sendTokenAddress)
         setReceiveType(config.receiveType)
         setReceiveChain(config.receiveChain)
         setReceiveChainId(config.receiveChainId)
         setReceiveAsset(config.receiveToken)
-        setReceiveTokenAddress(config.receiveTokenAddress)
         setReceiveFiat(config.receiveFiat)
       } catch (error) {
         console.error('Error loading configuration:', error)
@@ -78,12 +74,12 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
         sendChain,
         sendChainId,
         sendToken: sendAsset,
-        sendTokenAddress,
+        sendTokenAddress: '',
         receiveType,
         receiveChain,
         receiveChainId,
         receiveToken: receiveAsset,
-        receiveTokenAddress,
+        receiveTokenAddress: '',
         receiveFiat,
       })
       setShowSaved(true)
@@ -109,12 +105,10 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
         setSendChain(config.sendChain)
         setSendChainId(config.sendChainId)
         setSendAsset(config.sendToken)
-        setSendTokenAddress(config.sendTokenAddress)
         setReceiveType(config.receiveType)
         setReceiveChain(config.receiveChain)
         setReceiveChainId(config.receiveChainId)
         setReceiveAsset(config.receiveToken)
-        setReceiveTokenAddress(config.receiveTokenAddress)
         setReceiveFiat(config.receiveFiat)
       } catch (error) {
         console.error('Error loading configuration:', error)
@@ -165,12 +159,6 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
                     <Text style={styles.infoLabel}>Token</Text>
                     <Text style={styles.infoValue}>{sendAsset}</Text>
                   </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Token Address</Text>
-                    <Text style={[styles.infoValue, styles.addressValue]} numberOfLines={1}>
-                      {sendTokenAddress || 'Not set'}
-                    </Text>
-                  </View>
                 </CardContent>
               </Card>
             </View>
@@ -196,12 +184,6 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
                       <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>Token</Text>
                         <Text style={styles.infoValue}>{receiveAsset}</Text>
-                      </View>
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Token Address</Text>
-                        <Text style={[styles.infoValue, styles.addressValue]} numberOfLines={1}>
-                          {receiveTokenAddress || 'Not set'}
-                        </Text>
                       </View>
                     </>
                   ) : (
@@ -278,17 +260,6 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
                 </TouchableOpacity>
               ))}
             </View>
-
-            <Text style={styles.optionLabel}>Token Address</Text>
-            <TextInput
-              style={styles.textInput}
-              value={sendTokenAddress}
-              onChangeText={setSendTokenAddress}
-              placeholder="Enter token contract address (0x...)"
-              placeholderTextColor="#9ca3af"
-              autoCapitalize="none"
-              editable={true}
-            />
           </View>
         </View>
 
@@ -393,17 +364,6 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
                     </TouchableOpacity>
                   ))}
                 </View>
-
-                <Text style={styles.optionLabel}>Token Address</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={receiveTokenAddress}
-                  onChangeText={setReceiveTokenAddress}
-                  placeholder="Enter token contract address (0x...)"
-                  placeholderTextColor="#9ca3af"
-                  autoCapitalize="none"
-                  editable={true}
-                />
               </>
             ) : (
               <>
@@ -541,6 +501,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#e5e7eb',
+    marginTop: 16,
     marginBottom: 12,
     textTransform: 'uppercase',
     letterSpacing: 1,

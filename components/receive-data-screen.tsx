@@ -1,14 +1,16 @@
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { Ionicons } from '@expo/vector-icons'
 import React, { useEffect, useState } from 'react'
-import { Alert, Animated, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Alert, Animated, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 interface ReceiveDataScreenProps {
   onBack: () => void
+  onProceedToPayment?: () => void
 }
 
-export default function ReceiveDataScreen({ onBack }: ReceiveDataScreenProps) {
+export default function ReceiveDataScreen({ onBack, onProceedToPayment }: ReceiveDataScreenProps) {
   const insets = useSafeAreaInsets()
   const [isReceiving, setIsReceiving] = useState(false)
   const [hceSupported, setHceSupported] = useState(false)
@@ -111,13 +113,13 @@ export default function ReceiveDataScreen({ onBack }: ReceiveDataScreenProps) {
           // Stop NFC reading first
           await stopNfcReading()
           
-          // Parse the received data (format: "string1\nstring2\nstring3")
+          // Parse the received data (format: "optimism\nusdc\naddress\nnumber")
           const parts = receivedData.split('\n')
           let displayText = receivedData
-          if (parts.length >= 3) {
-            displayText = `String 1: ${parts[0]}\nString 2: ${parts[1]}\nString 3: ${parts[2]}`
-          } else if (parts.length === 2) {
-            displayText = `String 1: ${parts[0]}\nString 2: ${parts[1]}`
+          if (parts.length >= 4) {
+            displayText = `1. Blockchain: ${parts[0]}\n2. Token: ${parts[1]}\n3. Address: ${parts[2]}\n4. Number: ${parts[3]}`
+          } else if (parts.length >= 3) {
+            displayText = `1. Blockchain: ${parts[0]}\n2. Token: ${parts[1]}\n3. Address: ${parts[2]}`
           }
           
           // Update state
@@ -208,9 +210,8 @@ export default function ReceiveDataScreen({ onBack }: ReceiveDataScreenProps) {
         <View style={styles.placeholder} />
       </View>
 
+      {isReceiving ? (
       <View style={styles.content}>
-        {isReceiving ? (
-          <>
             <Animated.View
               style={[
                 styles.nfcIconContainer,
@@ -230,48 +231,103 @@ export default function ReceiveDataScreen({ onBack }: ReceiveDataScreenProps) {
             </View>
 
             <Button onPress={handleCancel} style={styles.cancelButton}>
-              <Text style={styles.cancelButtonText}>Stop Process</Text>
+            <Text style={styles.cancelButtonText}>Stop Process</Text>
             </Button>
-          </>
-        ) : (
-          <>
+        </View>
+      ) : (
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
             {receivedData ? (
               <>
                 <View style={styles.successIconContainer}>
                   <Ionicons name="checkmark-circle" size={64} color="#22c55e" />
                 </View>
                 <View style={styles.textContainer}>
-                  <Text style={styles.successTitle}>Data Received!</Text>
-                  <View style={styles.receivedDataContainer}>
-                    {(() => {
-                      // Parse the received data (format: "string1\nstring2\nstring3")
-                      const parts = receivedData.split('\n')
-                      if (parts.length >= 3) {
-                        return (
-                          <>
-                            <Text style={styles.receivedDataLabel}>String 1:</Text>
-                            <Text style={styles.receivedDataText}>{parts[0]}</Text>
-                            <Text style={styles.receivedDataLabel}>String 2:</Text>
-                            <Text style={styles.receivedDataText}>{parts[1]}</Text>
-                            <Text style={styles.receivedDataLabel}>String 3 (Numbers):</Text>
-                            <Text style={styles.receivedDataText}>{parts[2]}</Text>
-                          </>
-                        )
-                      } else if (parts.length === 2) {
-                        return (
-                          <>
-                            <Text style={styles.receivedDataLabel}>String 1:</Text>
-                            <Text style={styles.receivedDataText}>{parts[0]}</Text>
-                            <Text style={styles.receivedDataLabel}>String 2:</Text>
-                            <Text style={styles.receivedDataText}>{parts[1]}</Text>
-                          </>
-                        )
-                      }
-                      // Fallback: display as-is
-                      return <Text style={styles.receivedDataText}>{receivedData}</Text>
-                    })()}
-                  </View>
+                <Text style={styles.successTitle}>Payment Details Received!</Text>
+                <Text style={styles.successSubtitle}>Review the information below</Text>
+                
+                {(() => {
+                  // Parse the received data (format: "optimism\nusdc\naddress\nnumber")
+                  const parts = receivedData.split('\n')
+                  if (parts.length >= 4) {
+                    return (
+                      <Card style={styles.infoCard}>
+                        <CardContent>
+                          <View style={styles.infoGrid}>
+                            <View style={styles.infoItem}>
+                              <Text style={styles.infoLabel}>Address</Text>
+                              <Text style={[styles.infoValue, styles.addressValue]} numberOfLines={1}>
+                                {parts[2]}
+                              </Text>
+                            </View>
+                            <View style={styles.infoItem}>
+                              <Text style={styles.infoLabel}>Token</Text>
+                              <Text style={styles.infoAmount}>{parts[1].toUpperCase()}</Text>
+                            </View>
+                            <View style={styles.infoItem}>
+                              <Text style={styles.infoLabel}>Status</Text>
+                              <Text style={styles.infoStatus}>Received</Text>
+                            </View>
+                          </View>
+                        </CardContent>
+                      </Card>
+                    )
+                  } else if (parts.length >= 3) {
+                    return (
+                      <Card style={styles.infoCard}>
+                        <CardContent>
+                          <View style={styles.infoGrid}>
+                            <View style={styles.infoItem}>
+                              <Text style={styles.infoLabel}>Address</Text>
+                              <Text style={[styles.infoValue, styles.addressValue]} numberOfLines={1}>
+                                {parts[2]}
+                              </Text>
+                            </View>
+                            <View style={styles.infoItem}>
+                              <Text style={styles.infoLabel}>Token</Text>
+                              <Text style={styles.infoAmount}>{parts[1].toUpperCase()}</Text>
+                            </View>
+                            <View style={styles.infoItem}>
+                              <Text style={styles.infoLabel}>Status</Text>
+                              <Text style={styles.infoStatus}>Received</Text>
+                            </View>
+                          </View>
+                        </CardContent>
+                      </Card>
+                    )
+                  }
+                  // Fallback: display as-is
+                  return (
+                    <Card style={styles.infoCard}>
+                      <CardContent>
+                        <View style={styles.infoGrid}>
+                          <View style={styles.infoItem}>
+                            <Text style={styles.infoLabel}>Received Data</Text>
+                            <Text style={styles.infoValue}>{receivedData}</Text>
+                          </View>
+                        </View>
+                      </CardContent>
+                    </Card>
+                  )
+                })()}
                 </View>
+
+              <View style={styles.actionButtonsContainer}>
+                <Button
+                  onPress={() => {
+                    if (onProceedToPayment) {
+                      onProceedToPayment()
+                    }
+                  }}
+                  style={styles.payButton}
+                >
+                  <Ionicons name="card" size={20} color="#ffffff" style={styles.buttonIcon} />
+                  <Text style={styles.payButtonText}>Pay</Text>
+                </Button>
+                
                 <Button
                   onPress={() => {
                     setReceivedData(null)
@@ -281,6 +337,7 @@ export default function ReceiveDataScreen({ onBack }: ReceiveDataScreenProps) {
                 >
                   <Text style={styles.receiveAgainButtonText}>Receive Again</Text>
                 </Button>
+              </View>
               </>
             ) : (
               <>
@@ -301,9 +358,8 @@ export default function ReceiveDataScreen({ onBack }: ReceiveDataScreenProps) {
                 </Button>
               </>
             )}
-          </>
+        </ScrollView>
         )}
-      </View>
     </View>
   )
 }
@@ -353,6 +409,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 32,
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 24,
+    gap: 16,
+  },
   nfcIconContainer: {
     width: 128,
     height: 128,
@@ -392,27 +456,81 @@ const styles = StyleSheet.create({
     color: '#22c55e',
     textAlign: 'center',
   },
-  receivedDataContainer: {
-    width: '100%',
-    marginTop: 16,
-    gap: 12,
-  },
-  receivedDataLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#d1d5db',
-    textAlign: 'left',
-    marginTop: 8,
-  },
-  receivedDataText: {
+  successSubtitle: {
     fontSize: 16,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  infoCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginTop: 24,
+    width: '100%',
+  },
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 24,
+  },
+  infoItem: {
+    width: '45%',
+    gap: 4,
+  },
+  infoLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  infoValue: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#f3f4f6',
+  },
+  infoAmount: {
+    fontSize: 18,
+    fontWeight: '600',
     color: '#a855f7',
-    textAlign: 'left',
-    padding: 12,
-    backgroundColor: 'rgba(168, 85, 247, 0.1)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.3)',
+  },
+  infoStatus: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#22c55e',
+  },
+  addressValue: {
+    fontSize: 14,
+    fontFamily: 'monospace',
+    textTransform: 'none',
+  },
+  actionButtonsContainer: {
+    width: '100%',
+    gap: 12,
+    marginTop: 24,
+  },
+  payButton: {
+    width: '100%',
+    height: 56,
+    backgroundColor: '#22c55e',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  payButtonText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  buttonIcon: {
+    marginRight: 0,
   },
   successIconContainer: {
     width: 128,

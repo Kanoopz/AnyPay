@@ -1,20 +1,22 @@
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { initNFC } from '@/services/nfc-service'
 import { Ionicons } from '@expo/vector-icons'
 import React, { useEffect, useState } from 'react'
-import { Alert, Animated, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, Animated, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 interface SendDataScreenProps {
   onBack: () => void
 }
 
+type SendDataStep = 'input' | 'waiting_nfc'
+
 export default function SendDataScreen({ onBack }: SendDataScreenProps) {
   const insets = useSafeAreaInsets()
-  const [string1, setString1] = useState('') // Letters
-  const [string2, setString2] = useState('') // Letters
-  const [string3, setString3] = useState('') // Numbers
-  const [isSending, setIsSending] = useState(false)
+  const [step, setStep] = useState<SendDataStep>('input')
+  const [number, setNumber] = useState('') // Numbers only
   const [nfcSupported, setNfcSupported] = useState(false)
   const [isNfcReading, setIsNfcReading] = useState(false)
   const [hceSession, setHceSession] = useState<any | null>(null)
@@ -48,7 +50,7 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
             await stopHceOperation(currentSession)
           }
           await stopNfcReading()
-          setIsSending(false)
+          setStep('input')
           setIsNfcReading(false)
           console.log('✅ [Send] Cleanup complete')
         } catch (error) {
@@ -59,9 +61,9 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
     }
   }, [])
 
-  // Pulse animation when sending
+  // Pulse animation when waiting for NFC
   useEffect(() => {
-    if (isSending) {
+    if (step === 'waiting_nfc') {
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -79,18 +81,18 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
     } else {
       pulseAnim.setValue(1)
     }
-  }, [isSending])
+  }, [step])
 
-  const handleSend = async () => {
-    // Validate all fields
-    if (!string1.trim() || !string2.trim() || !string3.trim()) {
-      Alert.alert('Error', 'Please fill in all three fields')
+  const handleReceivePayment = async () => {
+    // Validate number field
+    if (!number.trim()) {
+      Alert.alert('Error', 'Please enter a number')
       return
     }
 
-    // Validate string3 is numbers only
-    if (!/^\d+$/.test(string3.trim())) {
-      Alert.alert('Error', 'String 3 must contain only numbers')
+    // Validate number is numbers only
+    if (!/^\d+$/.test(number.trim())) {
+      Alert.alert('Error', 'Please enter numbers only')
       return
     }
 
@@ -104,11 +106,12 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
       return
     }
 
-    setIsSending(true)
+    // Move to waiting step
+    setStep('waiting_nfc')
     setIsNfcReading(true)
 
-    // Combine all strings into a single payload with newline delimiter
-    const combinedData = `${string1.trim()}\n${string2.trim()}\n${string3.trim()}`
+    // Combine hardcoded strings with user input: optimism, usdc, address, number
+    const combinedData = `optimism\nusdc\n0x2dD6B1B4E37054fed6cC937f51546eFA31c8F615\n${number.trim()}`
 
     // Initialize HCE to share the data
     try {
@@ -117,7 +120,7 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
       
       if (!hceSession) {
         Alert.alert('HCE Not Available', 'Host Card Emulation is not available')
-        setIsSending(false)
+        setStep('input')
         setIsNfcReading(false)
         return
       }
@@ -132,16 +135,16 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
         () => {
           // Data was successfully read by receiving device
           console.log('✅ Data shared successfully via HCE')
-          setIsSending(false)
+          setStep('input')
           setIsNfcReading(false)
           stopHceOperation(hceSession)
           setHceSession(null)
           // Show alert on SENDING device
-          Alert.alert('Success', `Data sent through NFC:\nString 1: ${string1}\nString 2: ${string2}\nString 3: ${string3}`)
+          Alert.alert('Success', `Payment details sent through NFC:\n1: optimism\n2: usdc\n3: 0x2dD6B1B4E37054fed6cC937f51546eFA31c8F615\n4: ${number}`)
         },
         async (error: string) => {
           console.error('❌ HCE send error:', error)
-          setIsSending(false)
+          setStep('input')
           setIsNfcReading(false)
           await stopHceOperation(hceSession)
           setHceSession(null)
@@ -150,7 +153,7 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
       )
     } catch (error) {
       console.error('❌ Error initializing HCE:', error)
-      setIsSending(false)
+      setStep('input')
       setIsNfcReading(false)
       Alert.alert('Error', 'Failed to initialize NFC sharing')
     }
@@ -160,7 +163,7 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
     try {
       console.log('🛑 [Send] STOPPING process immediately...')
       // Immediately update state to prevent any further operations
-      setIsSending(false)
+      setStep('input')
       setIsNfcReading(false)
       
       // Force stop all NFC operations
@@ -189,7 +192,7 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
     } catch (error) {
       console.error('❌ [Send] Stop error:', error)
       // Force state reset even on error
-      setIsSending(false)
+      setStep('input')
       setIsNfcReading(false)
       setHceSession(null)
       hceSessionRef.current = null
@@ -212,68 +215,61 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
         >
           <Ionicons name="chevron-back" size={20} color="#f3f4f6" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Send Data</Text>
+        <Text style={styles.headerTitle}>Receive Payment</Text>
         <View style={styles.placeholder} />
       </View>
 
-      <View style={styles.content}>
-        {!isSending ? (
-          <>
-            <View style={styles.inputsContainer}>
+      {step === 'input' && (
+        <>
+          <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+            <View style={styles.amountContainer}>
+              <Text style={styles.amountLabel}>Amount to Send</Text>
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>String 1</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={string1}
-                  onChangeText={setString1}
-                  placeholder="Enter string 1..."
-                  placeholderTextColor="#9ca3af"
-                  editable={!isSending}
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>String 2</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={string2}
-                  onChangeText={setString2}
-                  placeholder="Enter string 2..."
-                  placeholderTextColor="#9ca3af"
-                  editable={!isSending}
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>String 3 (Numbers Only)</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={string3}
-                  onChangeText={setString3}
-                  placeholder="Enter numbers only..."
-                  placeholderTextColor="#9ca3af"
+                <Text style={styles.currencySymbol}>$</Text>
+                <Input
+                  style={styles.amountInput}
+                  value={number}
+                  onChangeText={setNumber}
+                  placeholder="0.00"
                   keyboardType="numeric"
-                  editable={!isSending}
+                  placeholderTextColor="#9ca3af"
                 />
               </View>
+
+              <Card style={styles.infoCard}>
+                <CardContent>
+                  <View style={styles.infoGrid}>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>Receive Type</Text>
+                      <Text style={styles.infoValue}>crypto</Text>
+                    </View>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>Network</Text>
+                      <Text style={styles.infoValue}>optimism</Text>
+                    </View>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>Token</Text>
+                      <Text style={styles.infoValue}>usdc</Text>
+                    </View>
+                  </View>
+                </CardContent>
+              </Card>
             </View>
+          </ScrollView>
 
-            <Button
-              onPress={handleSend}
-              disabled={!string1.trim() || !string2.trim() || !string3.trim() || !nfcSupported}
-              style={[styles.sendButton, (!string1.trim() || !string2.trim() || !string3.trim() || !nfcSupported) && styles.disabledButton]}
-            >
-              <Text style={styles.sendButtonText}>Send via NFC</Text>
-            </Button>
+          <Button
+            onPress={handleReceivePayment}
+            disabled={!number.trim() || !nfcSupported}
+            style={[styles.confirmButton, (!number.trim() || !nfcSupported) && styles.disabledButton]}
+          >
+            <Text style={styles.confirmButtonText}>Receive Payment</Text>
+          </Button>
+        </>
+      )}
 
-            {!nfcSupported && (
-              <Text style={styles.warningText}>
-                ⚠️ NFC is not available on this device
-              </Text>
-            )}
-          </>
-        ) : (
-          <>
+      {step === 'waiting_nfc' && (
+        <>
+          <View style={styles.content}>
             <Animated.View
               style={[
                 styles.nfcIconContainer,
@@ -288,21 +284,17 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
             </Animated.View>
 
             <View style={styles.textContainer}>
-              <Text style={styles.title}>Sending Data...</Text>
-              <Text style={styles.subtitle}>Tap your phone near the receiving device</Text>
-              <View style={styles.dataPreviewContainer}>
-                <Text style={styles.dataPreview}>String 1: "{string1}"</Text>
-                <Text style={styles.dataPreview}>String 2: "{string2}"</Text>
-                <Text style={styles.dataPreview}>String 3: "{string3}"</Text>
-              </View>
+              <Text style={styles.title}>Waiting for Payment</Text>
+              <Text style={styles.amountDisplay}>${number}</Text>
+              <Text style={styles.hint}>Hold sender's phone near your device...</Text>
             </View>
+          </View>
 
-            <Button onPress={handleCancel} style={styles.cancelButton}>
-              <Text style={styles.cancelButtonText}>Stop Process</Text>
-            </Button>
-          </>
-        )}
-      </View>
+          <Button onPress={handleCancel} style={styles.cancelButton}>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </Button>
+        </>
+      )}
     </View>
   )
 }
@@ -350,53 +342,101 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     justifyContent: 'center',
-    gap: 24,
+    gap: 32,
   },
-  inputsContainer: {
-    width: '100%',
-    gap: 16,
+  scrollView: {
+    flex: 1,
   },
-  inputContainer: {
-    width: '100%',
-    gap: 8,
+  scrollContent: {
+    flexGrow: 1,
   },
-  inputLabel: {
+  amountContainer: {
+    flex: 1,
+    gap: 32,
+    marginTop: 32,
+  },
+  amountLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#f3f4f6',
+    color: '#e5e7eb',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  textInput: {
-    width: '100%',
-    minHeight: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 16,
-    color: '#f3f4f6',
-  },
-  sendButton: {
-    width: '100%',
-    height: 56,
-    backgroundColor: '#a855f7',
-    borderRadius: 16,
+  inputContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    position: 'relative',
   },
-  sendButtonText: {
+  currencySymbol: {
+    position: 'absolute',
+    left: 24,
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#a855f7',
+    zIndex: 1,
+  },
+  amountInput: {
+    paddingLeft: 64,
+    height: 64,
+    fontSize: 36,
+    fontWeight: 'bold',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    color: '#f3f4f6',
+  },
+  infoCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  infoItem: {
+    width: '45%',
+    gap: 8,
+  },
+  infoLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#f3f4f6',
+    textTransform: 'capitalize',
+  },
+  addressValue: {
+    fontSize: 12,
+    fontFamily: 'monospace',
+    textTransform: 'none',
+  },
+  confirmButton: {
+    width: '100%',
+    height: 48,
+    backgroundColor: '#a855f7',
+  },
+  confirmButtonText: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
   },
   disabledButton: {
     opacity: 0.4,
   },
-  warningText: {
+  amountDisplay: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#f3f4f6',
+  },
+  hint: {
     fontSize: 14,
-    color: '#fbbf24',
+    color: '#9ca3af',
+    marginTop: 16,
     textAlign: 'center',
-    marginTop: 8,
   },
   nfcIconContainer: {
     width: 128,

@@ -19,13 +19,13 @@ export interface AppConfiguration {
 const CONFIG_STORAGE_KEY = '@anypay:configuration'
 
 const DEFAULT_CONFIG: AppConfiguration = {
-  sendChain: 'Polygon',
-  sendChainId: '80001', // Mumbai testnet
-  sendToken: 'USDC',
+  sendChain: 'Arbitrum',
+  sendChainId: '421614', // Arbitrum Sepolia testnet
+  sendToken: 'ETH',
   sendTokenAddress: '',
   receiveType: 'crypto',
-  receiveChain: 'Polygon',
-  receiveChainId: '80001', // Mumbai testnet
+  receiveChain: 'Optimism',
+  receiveChainId: '11155420', // Optimism Sepolia testnet
   receiveToken: 'USDC',
   receiveTokenAddress: '',
   receiveFiat: 'USD',

@@ -1,20 +1,17 @@
-import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native'
+import GradientText from '@/components/gradient-text'
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
-import { Button } from '@/components/ui/button'
+import React from 'react'
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import GradientText from '@/components/gradient-text'
 
 interface HomeScreenProps {
-  onSendClick: () => void
-  onReceiveClick: () => void
   onSettingsClick: () => void
   onSendDataClick: () => void
   onReceiveDataClick: () => void
 }
 
-export default function HomeScreen({ onSendClick, onReceiveClick, onSettingsClick, onSendDataClick, onReceiveDataClick }: HomeScreenProps) {
+export default function HomeScreen({ onSettingsClick, onSendDataClick, onReceiveDataClick }: HomeScreenProps) {
   const insets = useSafeAreaInsets()
   const pulseAnim = React.useRef(new Animated.Value(1)).current
 
@@ -64,16 +61,18 @@ export default function HomeScreen({ onSendClick, onReceiveClick, onSettingsClic
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.logoGradient}
-          />
+          >
+            <Ionicons name="cash" size={40} color="#ffffff" />
+          </LinearGradient>
         </Animated.View>
-        <GradientText style={styles.title}>Crypto Pay</GradientText>
+        <GradientText style={styles.title}>AnyPay</GradientText>
         <GradientText style={styles.subtitle}>Instant NFC Payments</GradientText>
       </View>
 
       <View style={styles.buttonsContainer}>
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={onSendClick}
+          onPress={onSendDataClick}
           activeOpacity={0.8}
         >
           <View style={styles.actionButtonContent}>
@@ -90,7 +89,7 @@ export default function HomeScreen({ onSendClick, onReceiveClick, onSettingsClic
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={onReceiveClick}
+          onPress={onReceiveDataClick}
           activeOpacity={0.8}
         >
           <View style={styles.actionButtonContent}>
@@ -100,40 +99,6 @@ export default function HomeScreen({ onSendClick, onReceiveClick, onSettingsClic
             <View style={styles.actionTextContainer}>
               <Text style={styles.actionTitle}>Receive Payment</Text>
               <Text style={styles.actionSubtitle}>Set amount and wait</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#ffffff" />
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={onSendDataClick}
-          activeOpacity={0.8}
-        >
-          <View style={styles.actionButtonContent}>
-            <View style={styles.actionIconContainer}>
-              <Ionicons name="send" size={24} color="#ffffff" />
-            </View>
-            <View style={styles.actionTextContainer}>
-              <Text style={styles.actionTitle}>Send Data</Text>
-              <Text style={styles.actionSubtitle}>Send string via NFC</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#ffffff" />
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={onReceiveDataClick}
-          activeOpacity={0.8}
-        >
-          <View style={styles.actionButtonContent}>
-            <View style={styles.actionIconContainer}>
-              <Ionicons name="document-text" size={24} color="#ffffff" />
-            </View>
-            <View style={styles.actionTextContainer}>
-              <Text style={styles.actionTitle}>Receive Data</Text>
-              <Text style={styles.actionSubtitle}>Receive string via NFC</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#ffffff" />
           </View>
@@ -220,6 +185,8 @@ const styles = StyleSheet.create({
   },
   logoGradient: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontSize: 48,

@@ -1,11 +1,11 @@
-import { useState } from 'react'
-import { View, StyleSheet } from 'react-native'
-import HomeScreen from '@/components/home-screen'
-import SendPaymentFlow from '@/components/send-payment-flow'
-import ReceivePaymentFlow from '@/components/receive-payment-flow'
 import ConfigurationScreen from '@/components/configuration-screen'
-import SendDataScreen from '@/components/send-data-screen'
+import HomeScreen from '@/components/home-screen'
 import ReceiveDataScreen from '@/components/receive-data-screen'
+import ReceivePaymentFlow from '@/components/receive-payment-flow'
+import SendDataScreen from '@/components/send-data-screen'
+import SendPaymentFlow from '@/components/send-payment-flow'
+import { useState } from 'react'
+import { StyleSheet, View } from 'react-native'
 
 type Screen = 'home' | 'send' | 'receive' | 'config' | 'sendData' | 'receiveData'
 
@@ -23,8 +23,6 @@ export default function Index() {
     <View style={styles.container}>
       {currentScreen === 'home' && (
         <HomeScreen
-          onSendClick={handleSendPayment}
-          onReceiveClick={handleReceivePayment}
           onSettingsClick={handleOpenConfig}
           onSendDataClick={handleSendData}
           onReceiveDataClick={handleReceiveData}
@@ -34,7 +32,12 @@ export default function Index() {
       {currentScreen === 'receive' && <ReceivePaymentFlow onBack={handleBack} />}
       {currentScreen === 'config' && <ConfigurationScreen onBack={handleBack} />}
       {currentScreen === 'sendData' && <SendDataScreen onBack={handleBack} />}
-      {currentScreen === 'receiveData' && <ReceiveDataScreen onBack={handleBack} />}
+      {currentScreen === 'receiveData' && (
+        <ReceiveDataScreen 
+          onBack={handleBack} 
+          onProceedToPayment={() => setCurrentScreen('send')}
+        />
+      )}
     </View>
   )
 }
