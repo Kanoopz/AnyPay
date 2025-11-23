@@ -1,31 +1,127 @@
-import React, { useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { loadConfiguration, saveConfiguration } from '@/services/storage-service'
+import { Ionicons } from '@expo/vector-icons'
+import React, { useEffect, useState } from 'react'
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 interface ConfigurationScreenProps {
   onBack: () => void
 }
 
+// Chain name to ID mapping (Testnets)
+const CHAIN_IDS: Record<string, string> = {
+  Ethereum: '11155111', // Sepolia testnet
+  Polygon: '80001', // Mumbai testnet
+  Arbitrum: '421614', // Arbitrum Sepolia testnet
+  Optimism: '11155420', // Optimism Sepolia testnet
+}
+
+type ConfigMode = 'view' | 'edit'
+
 export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps) {
   const insets = useSafeAreaInsets()
+  const [mode, setMode] = useState<ConfigMode>('view')
   const [showSaved, setShowSaved] = useState(false)
   const [sendChain, setSendChain] = useState('Polygon')
+  const [sendChainId, setSendChainId] = useState('80001')
   const [sendAsset, setSendAsset] = useState('USDC')
+  const [sendTokenAddress, setSendTokenAddress] = useState('')
   const [receiveType, setReceiveType] = useState<'crypto' | 'fiat'>('crypto')
   const [receiveChain, setReceiveChain] = useState('Polygon')
+  const [receiveChainId, setReceiveChainId] = useState('80001')
   const [receiveAsset, setReceiveAsset] = useState('USDC')
+  const [receiveTokenAddress, setReceiveTokenAddress] = useState('')
   const [receiveFiat, setReceiveFiat] = useState('USD')
 
   const chains = ['Ethereum', 'Polygon', 'Arbitrum', 'Optimism']
   const assets = ['USDC', 'USDT', 'ETH', 'wBTC']
   const fiats = ['USD', 'EUR', 'GBP']
 
-  const handleSave = () => {
-    setShowSaved(true)
-    setTimeout(() => setShowSaved(false), 2000)
+  // Load saved configuration on mount
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const config = await loadConfiguration()
+        setSendChain(config.sendChain)
+        setSendChainId(config.sendChainId)
+        setSendAsset(config.sendToken)
+        setSendTokenAddress(config.sendTokenAddress)
+        setReceiveType(config.receiveType)
+        setReceiveChain(config.receiveChain)
+        setReceiveChainId(config.receiveChainId)
+        setReceiveAsset(config.receiveToken)
+        setReceiveTokenAddress(config.receiveTokenAddress)
+        setReceiveFiat(config.receiveFiat)
+      } catch (error) {
+        console.error('Error loading configuration:', error)
+      }
+    }
+    loadConfig()
+  }, [])
+
+  // Update chain ID when chain name changes
+  const handleSendChainChange = (chain: string) => {
+    setSendChain(chain)
+    setSendChainId(CHAIN_IDS[chain] || '')
+  }
+
+  const handleReceiveChainChange = (chain: string) => {
+    setReceiveChain(chain)
+    setReceiveChainId(CHAIN_IDS[chain] || '')
+  }
+
+  const handleSave = async () => {
+    try {
+      await saveConfiguration({
+        sendChain,
+        sendChainId,
+        sendToken: sendAsset,
+        sendTokenAddress,
+        receiveType,
+        receiveChain,
+        receiveChainId,
+        receiveToken: receiveAsset,
+        receiveTokenAddress,
+        receiveFiat,
+      })
+      setShowSaved(true)
+      setTimeout(() => {
+        setShowSaved(false)
+        setMode('view') // Switch back to view mode after saving
+      }, 2000)
+    } catch (error) {
+      console.error('Error saving configuration:', error)
+      // Could show error alert here
+    }
+  }
+
+  const handleEdit = () => {
+    setMode('edit')
+  }
+
+  const handleCancel = () => {
+    // Reload saved config to discard changes
+    const reloadConfig = async () => {
+      try {
+        const config = await loadConfiguration()
+        setSendChain(config.sendChain)
+        setSendChainId(config.sendChainId)
+        setSendAsset(config.sendToken)
+        setSendTokenAddress(config.sendTokenAddress)
+        setReceiveType(config.receiveType)
+        setReceiveChain(config.receiveChain)
+        setReceiveChainId(config.receiveChainId)
+        setReceiveAsset(config.receiveToken)
+        setReceiveTokenAddress(config.receiveTokenAddress)
+        setReceiveFiat(config.receiveFiat)
+      } catch (error) {
+        console.error('Error loading configuration:', error)
+      }
+    }
+    reloadConfig()
+    setMode('view')
   }
 
   return (
@@ -38,11 +134,90 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
           <Ionicons name="chevron-back" size={20} color="#f3f4f6" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings</Text>
-        <View style={styles.placeholder} />
+        {mode === 'view' ? (
+          <TouchableOpacity onPress={handleEdit} style={styles.editButton} activeOpacity={0.7}>
+            <Ionicons name="create-outline" size={20} color="#a855f7" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={handleCancel} style={styles.cancelButton} activeOpacity={0.7}>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.section}>
+        {mode === 'view' ? (
+          // VIEW MODE - Display only
+          <>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Sending Preferences</Text>
+              <Card style={styles.infoCard}>
+                <CardContent>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Blockchain</Text>
+                    <Text style={styles.infoValue}>{sendChain}</Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Chain ID</Text>
+                    <Text style={styles.infoValue}>{sendChainId || 'Not set'}</Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Token</Text>
+                    <Text style={styles.infoValue}>{sendAsset}</Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Token Address</Text>
+                    <Text style={[styles.infoValue, styles.addressValue]} numberOfLines={1}>
+                      {sendTokenAddress || 'Not set'}
+                    </Text>
+                  </View>
+                </CardContent>
+              </Card>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Receiving Preferences</Text>
+              <Card style={styles.infoCard}>
+                <CardContent>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Receive As</Text>
+                    <Text style={styles.infoValue}>{receiveType === 'crypto' ? 'Crypto' : 'Fiat'}</Text>
+                  </View>
+                  {receiveType === 'crypto' ? (
+                    <>
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Blockchain</Text>
+                        <Text style={styles.infoValue}>{receiveChain}</Text>
+                      </View>
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Chain ID</Text>
+                        <Text style={styles.infoValue}>{receiveChainId || 'Not set'}</Text>
+                      </View>
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Token</Text>
+                        <Text style={styles.infoValue}>{receiveAsset}</Text>
+                      </View>
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Token Address</Text>
+                        <Text style={[styles.infoValue, styles.addressValue]} numberOfLines={1}>
+                          {receiveTokenAddress || 'Not set'}
+                        </Text>
+                      </View>
+                    </>
+                  ) : (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Fiat Currency</Text>
+                      <Text style={styles.infoValue}>{receiveFiat}</Text>
+                    </View>
+                  )}
+                </CardContent>
+              </Card>
+            </View>
+          </>
+        ) : (
+          // EDIT MODE - Interactive
+          <>
+            <View style={styles.section}>
           <Text style={styles.sectionTitle}>Sending Preferences</Text>
           <View style={styles.optionsContainer}>
             <Text style={styles.optionLabel}>Default Blockchain</Text>
@@ -50,7 +225,7 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
               {chains.map((chain) => (
                 <TouchableOpacity
                   key={chain}
-                  onPress={() => setSendChain(chain)}
+                  onPress={() => handleSendChainChange(chain)}
                   style={[
                     styles.optionButton,
                     sendChain === chain && styles.optionButtonActive,
@@ -68,6 +243,17 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
                 </TouchableOpacity>
               ))}
             </View>
+
+            <Text style={styles.optionLabel}>Blockchain ID</Text>
+            <TextInput
+              style={styles.textInput}
+              value={sendChainId}
+              onChangeText={setSendChainId}
+              placeholder="Enter chain ID (e.g., 80001)"
+              placeholderTextColor="#9ca3af"
+              keyboardType="numeric"
+              editable={true}
+            />
 
             <Text style={styles.optionLabel}>Default Payment Asset</Text>
             <View style={styles.grid}>
@@ -92,6 +278,17 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
                 </TouchableOpacity>
               ))}
             </View>
+
+            <Text style={styles.optionLabel}>Token Address</Text>
+            <TextInput
+              style={styles.textInput}
+              value={sendTokenAddress}
+              onChangeText={setSendTokenAddress}
+              placeholder="Enter token contract address (0x...)"
+              placeholderTextColor="#9ca3af"
+              autoCapitalize="none"
+              editable={true}
+            />
           </View>
         </View>
 
@@ -143,7 +340,7 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
                   {chains.map((chain) => (
                     <TouchableOpacity
                       key={chain}
-                      onPress={() => setReceiveChain(chain)}
+                      onPress={() => handleReceiveChainChange(chain)}
                       style={[
                         styles.optionButton,
                         receiveChain === chain && styles.optionButtonActiveRed,
@@ -161,6 +358,17 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
                     </TouchableOpacity>
                   ))}
                 </View>
+
+                <Text style={styles.optionLabel}>Blockchain ID</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={receiveChainId}
+                  onChangeText={setReceiveChainId}
+                  placeholder="Enter chain ID (e.g., 80001)"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="numeric"
+                  editable={true}
+                />
 
                 <Text style={styles.optionLabel}>Default Receive Asset</Text>
                 <View style={styles.grid}>
@@ -185,6 +393,17 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
                     </TouchableOpacity>
                   ))}
                 </View>
+
+                <Text style={styles.optionLabel}>Token Address</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={receiveTokenAddress}
+                  onChangeText={setReceiveTokenAddress}
+                  placeholder="Enter token contract address (0x...)"
+                  placeholderTextColor="#9ca3af"
+                  autoCapitalize="none"
+                  editable={true}
+                />
               </>
             ) : (
               <>
@@ -225,9 +444,12 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
             )}
           </View>
         </View>
+          </>
+        )}
       </ScrollView>
 
-      <View style={styles.footer}>
+      {mode === 'edit' && (
+        <View style={styles.footer}>
         {showSaved && (
           <Card style={styles.savedCard}>
             <CardContent>
@@ -242,6 +464,7 @@ export default function ConfigurationScreen({ onBack }: ConfigurationScreenProps
           <Text style={styles.saveButtonText}>Save Configuration</Text>
         </Button>
       </View>
+      )}
     </View>
   )
 }
@@ -433,6 +656,67 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  textInput: {
+    width: '100%',
+    minHeight: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#f3f4f6',
+    fontFamily: 'monospace',
+  },
+  editButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(168, 85, 247, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  cancelButtonText: {
+    color: '#f3f4f6',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  infoCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  infoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#9ca3af',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#f3f4f6',
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: 16,
+  },
+  addressValue: {
+    fontFamily: 'monospace',
+    fontSize: 12,
   },
 })
 

@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { initHCE, handleReceive, stopHceOperation } from '@/services/nfc-service'
+import { loadConfiguration } from '@/services/storage-service'
 
 interface ReceivePaymentFlowProps {
   onBack: () => void
@@ -17,11 +18,28 @@ export default function ReceivePaymentFlow({ onBack }: ReceivePaymentFlowProps) 
   const insets = useSafeAreaInsets()
   const [step, setStep] = useState<ReceiveStep>('amount')
   const [amount, setAmount] = useState('')
-  const [receiveType] = useState<'crypto' | 'fiat'>('crypto')
+  const [receiveType, setReceiveType] = useState<'crypto' | 'fiat'>('crypto')
+  const [receiveChain, setReceiveChain] = useState('Polygon')
+  const [receiveToken, setReceiveToken] = useState('USDC')
   const [hceSupported, setHceSupported] = useState(false)
   const [isHceActive, setIsHceActive] = useState(false)
   const [session, setSession] = useState<any | null>(null)
   const [dataShared, setDataShared] = useState(false)
+
+  // Load saved configuration
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const config = await loadConfiguration()
+        setReceiveType(config.receiveType)
+        setReceiveChain(config.receiveChain)
+        setReceiveToken(config.receiveToken)
+      } catch (error) {
+        console.error('Error loading configuration:', error)
+      }
+    }
+    loadConfig()
+  }, [])
 
   const pulseAnim = React.useRef(new Animated.Value(1)).current
   const spinAnim = React.useRef(new Animated.Value(0)).current
@@ -169,8 +187,14 @@ export default function ReceivePaymentFlow({ onBack }: ReceivePaymentFlowProps) 
                     </View>
                     <View style={styles.infoItem}>
                       <Text style={styles.infoLabel}>Network</Text>
-                      <Text style={styles.infoValue}>Polygon</Text>
+                      <Text style={styles.infoValue}>{receiveChain}</Text>
                     </View>
+                    {receiveType === 'crypto' && (
+                      <View style={styles.infoItem}>
+                        <Text style={styles.infoLabel}>Token</Text>
+                        <Text style={styles.infoValue}>{receiveToken}</Text>
+                      </View>
+                    )}
                   </View>
                 </CardContent>
               </Card>
