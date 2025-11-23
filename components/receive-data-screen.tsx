@@ -1,5 +1,4 @@
 import { Button } from '@/components/ui/button'
-import { stopHceOperation } from '@/services/nfc-service'
 import { Ionicons } from '@expo/vector-icons'
 import React, { useEffect, useState } from 'react'
 import { Alert, Animated, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
@@ -19,6 +18,17 @@ export default function ReceiveDataScreen({ onBack }: ReceiveDataScreenProps) {
   const [isNfcReading, setIsNfcReading] = useState(false)
 
   const pulseAnim = React.useRef(new Animated.Value(1)).current
+  const sessionRef = React.useRef<any | null>(null)
+  const isReceivingRef = React.useRef(false)
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    sessionRef.current = session
+  }, [session])
+
+  useEffect(() => {
+    isReceivingRef.current = isReceiving
+  }, [isReceiving])
 
   // Initialize NFC on mount and auto-start receiving
   useEffect(() => {
@@ -41,13 +51,20 @@ export default function ReceiveDataScreen({ onBack }: ReceiveDataScreenProps) {
     return () => {
       const cleanup = async () => {
         try {
+          console.log('🧹 [Receive] Cleaning up on unmount...')
           const { stopNfcReading, stopHceOperation } = await import('@/services/nfc-service')
           await stopNfcReading()
-          if (session) {
-            await stopHceOperation(session)
+          // Use ref to get latest session value
+          const currentSession = sessionRef.current
+          if (currentSession) {
+            await stopHceOperation(currentSession)
           }
+          setIsReceiving(false)
+          setIsHceActive(false)
+          setIsNfcReading(false)
+          console.log('✅ [Receive] Cleanup complete')
         } catch (error) {
-          // Ignore cleanup errors
+          console.error('❌ [Receive] Cleanup error:', error)
         }
       }
       cleanup()
@@ -88,23 +105,36 @@ export default function ReceiveDataScreen({ onBack }: ReceiveDataScreenProps) {
       const { handlePay, stopNfcReading } = await import('@/services/nfc-service')
       
       handlePay(
-        (receivedData: string) => {
+        async (receivedData: string) => {
           // Data received from sending device via NFC
           console.log('✅ Data received via NFC:', receivedData)
+          // Stop NFC reading first
+          await stopNfcReading()
+          
+          // Parse the received data (format: "string1\nstring2\nstring3")
+          const parts = receivedData.split('\n')
+          let displayText = receivedData
+          if (parts.length >= 3) {
+            displayText = `String 1: ${parts[0]}\nString 2: ${parts[1]}\nString 3: ${parts[2]}`
+          } else if (parts.length === 2) {
+            displayText = `String 1: ${parts[0]}\nString 2: ${parts[1]}`
+          }
+          
+          // Update state
           setReceivedData(receivedData)
           setIsReceiving(false)
           setIsHceActive(false)
           setIsNfcReading(false)
-          stopNfcReading()
           // Show alert on RECEIVING device
-          Alert.alert('Data Received', `Data received: ${receivedData}`)
+          Alert.alert('Data Received', displayText)
         },
         async (error: string) => {
           console.error('❌ NFC receive error:', error)
+          // Ensure cleanup happens
+          await stopNfcReading()
           setIsReceiving(false)
           setIsHceActive(false)
           setIsNfcReading(false)
-          await stopNfcReading()
           Alert.alert('Receive Failed', `Failed to receive data: ${error}`)
         }
       )
@@ -119,15 +149,38 @@ export default function ReceiveDataScreen({ onBack }: ReceiveDataScreenProps) {
 
   const handleCancel = async () => {
     try {
-      const { stopNfcReading } = await import('@/services/nfc-service')
-      await stopNfcReading()
-      if (session) {
-        await stopHceOperation(session)
-      }
+      console.log('🛑 [Receive] STOPPING process immediately...')
+      // Immediately update state to prevent any further operations
       setIsReceiving(false)
       setIsHceActive(false)
       setIsNfcReading(false)
+      
+      // Force stop all NFC operations
+      const { stopNfcReading, stopHceOperation } = await import('@/services/nfc-service')
+      
+      // Stop NFC reading first
+      try {
+        await stopNfcReading()
+      } catch (e) {
+        console.error('Error stopping NFC reading:', e)
+      }
+      
+      // Stop HCE session if exists
+      const currentSession = sessionRef.current
+      if (currentSession) {
+        try {
+          await stopHceOperation(currentSession)
+        } catch (e) {
+          console.error('Error stopping HCE:', e)
+        }
+        setSession(null)
+        sessionRef.current = null
+      }
+      
+      console.log('✅ [Receive] Process stopped successfully')
     } catch (error) {
+      console.error('❌ [Receive] Stop error:', error)
+      // Force state reset even on error
       setIsReceiving(false)
       setIsHceActive(false)
       setIsNfcReading(false)
@@ -140,7 +193,15 @@ export default function ReceiveDataScreen({ onBack }: ReceiveDataScreenProps) {
       <View style={styles.backgroundBlur} />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.7}>
+        <TouchableOpacity 
+          onPress={async () => {
+            // Clean up before going back
+            await handleCancel()
+            onBack()
+          }} 
+          style={styles.backButton} 
+          activeOpacity={0.7}
+        >
           <Ionicons name="chevron-back" size={20} color="#f3f4f6" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Receive Data</Text>
@@ -169,7 +230,7 @@ export default function ReceiveDataScreen({ onBack }: ReceiveDataScreenProps) {
             </View>
 
             <Button onPress={handleCancel} style={styles.cancelButton}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>Stop Process</Text>
             </Button>
           </>
         ) : (
@@ -181,7 +242,35 @@ export default function ReceiveDataScreen({ onBack }: ReceiveDataScreenProps) {
                 </View>
                 <View style={styles.textContainer}>
                   <Text style={styles.successTitle}>Data Received!</Text>
-                  <Text style={styles.receivedDataText}>{receivedData}</Text>
+                  <View style={styles.receivedDataContainer}>
+                    {(() => {
+                      // Parse the received data (format: "string1\nstring2\nstring3")
+                      const parts = receivedData.split('\n')
+                      if (parts.length >= 3) {
+                        return (
+                          <>
+                            <Text style={styles.receivedDataLabel}>String 1:</Text>
+                            <Text style={styles.receivedDataText}>{parts[0]}</Text>
+                            <Text style={styles.receivedDataLabel}>String 2:</Text>
+                            <Text style={styles.receivedDataText}>{parts[1]}</Text>
+                            <Text style={styles.receivedDataLabel}>String 3 (Numbers):</Text>
+                            <Text style={styles.receivedDataText}>{parts[2]}</Text>
+                          </>
+                        )
+                      } else if (parts.length === 2) {
+                        return (
+                          <>
+                            <Text style={styles.receivedDataLabel}>String 1:</Text>
+                            <Text style={styles.receivedDataText}>{parts[0]}</Text>
+                            <Text style={styles.receivedDataLabel}>String 2:</Text>
+                            <Text style={styles.receivedDataText}>{parts[1]}</Text>
+                          </>
+                        )
+                      }
+                      // Fallback: display as-is
+                      return <Text style={styles.receivedDataText}>{receivedData}</Text>
+                    })()}
+                  </View>
                 </View>
                 <Button
                   onPress={() => {
@@ -303,14 +392,25 @@ const styles = StyleSheet.create({
     color: '#22c55e',
     textAlign: 'center',
   },
-  receivedDataText: {
-    fontSize: 18,
-    color: '#a855f7',
-    textAlign: 'center',
+  receivedDataContainer: {
+    width: '100%',
     marginTop: 16,
-    padding: 16,
+    gap: 12,
+  },
+  receivedDataLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#d1d5db',
+    textAlign: 'left',
+    marginTop: 8,
+  },
+  receivedDataText: {
+    fontSize: 16,
+    color: '#a855f7',
+    textAlign: 'left',
+    padding: 12,
     backgroundColor: 'rgba(168, 85, 247, 0.1)',
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(168, 85, 247, 0.3)',
   },

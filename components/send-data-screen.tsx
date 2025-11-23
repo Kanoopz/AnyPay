@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Animated, TextInput, Alert, Platform } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 import { Button } from '@/components/ui/button'
+import { initNFC } from '@/services/nfc-service'
+import { Ionicons } from '@expo/vector-icons'
+import React, { useEffect, useState } from 'react'
+import { Alert, Animated, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { initNFC, handlePay, stopNfcReading } from '@/services/nfc-service'
 
 interface SendDataScreenProps {
   onBack: () => void
@@ -11,13 +11,21 @@ interface SendDataScreenProps {
 
 export default function SendDataScreen({ onBack }: SendDataScreenProps) {
   const insets = useSafeAreaInsets()
-  const [dataToSend, setDataToSend] = useState('')
+  const [string1, setString1] = useState('') // Letters
+  const [string2, setString2] = useState('') // Letters
+  const [string3, setString3] = useState('') // Numbers
   const [isSending, setIsSending] = useState(false)
   const [nfcSupported, setNfcSupported] = useState(false)
   const [isNfcReading, setIsNfcReading] = useState(false)
   const [hceSession, setHceSession] = useState<any | null>(null)
 
   const pulseAnim = React.useRef(new Animated.Value(1)).current
+  const hceSessionRef = React.useRef<any | null>(null)
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    hceSessionRef.current = hceSession
+  }, [hceSession])
 
   // Initialize NFC on mount
   useEffect(() => {
@@ -28,6 +36,27 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
       }
     }
     initializeNFC()
+
+    return () => {
+      const cleanup = async () => {
+        try {
+          console.log('🧹 [Send] Cleaning up on unmount...')
+          const { stopHceOperation, stopNfcReading } = await import('@/services/nfc-service')
+          // Use ref to get latest session value
+          const currentSession = hceSessionRef.current
+          if (currentSession) {
+            await stopHceOperation(currentSession)
+          }
+          await stopNfcReading()
+          setIsSending(false)
+          setIsNfcReading(false)
+          console.log('✅ [Send] Cleanup complete')
+        } catch (error) {
+          console.error('❌ [Send] Cleanup error:', error)
+        }
+      }
+      cleanup()
+    }
   }, [])
 
   // Pulse animation when sending
@@ -53,8 +82,15 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
   }, [isSending])
 
   const handleSend = async () => {
-    if (!dataToSend.trim()) {
-      Alert.alert('Error', 'Please enter a string to send')
+    // Validate all fields
+    if (!string1.trim() || !string2.trim() || !string3.trim()) {
+      Alert.alert('Error', 'Please fill in all three fields')
+      return
+    }
+
+    // Validate string3 is numbers only
+    if (!/^\d+$/.test(string3.trim())) {
+      Alert.alert('Error', 'String 3 must contain only numbers')
       return
     }
 
@@ -70,6 +106,9 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
 
     setIsSending(true)
     setIsNfcReading(true)
+
+    // Combine all strings into a single payload with newline delimiter
+    const combinedData = `${string1.trim()}\n${string2.trim()}\n${string3.trim()}`
 
     // Initialize HCE to share the data
     try {
@@ -89,7 +128,7 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
       // Share data via HCE
       handleReceive(
         hceSession,
-        dataToSend,
+        combinedData,
         () => {
           // Data was successfully read by receiving device
           console.log('✅ Data shared successfully via HCE')
@@ -98,7 +137,7 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
           stopHceOperation(hceSession)
           setHceSession(null)
           // Show alert on SENDING device
-          Alert.alert('Success', `String sent through NFC: ${dataToSend}`)
+          Alert.alert('Success', `Data sent through NFC:\nString 1: ${string1}\nString 2: ${string2}\nString 3: ${string3}`)
         },
         async (error: string) => {
           console.error('❌ HCE send error:', error)
@@ -119,17 +158,41 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
 
   const handleCancel = async () => {
     try {
-      if (hceSession) {
-        const { stopHceOperation } = await import('@/services/nfc-service')
-        await stopHceOperation(hceSession)
-        setHceSession(null)
-      }
+      console.log('🛑 [Send] STOPPING process immediately...')
+      // Immediately update state to prevent any further operations
       setIsSending(false)
       setIsNfcReading(false)
+      
+      // Force stop all NFC operations
+      const { stopHceOperation, stopNfcReading } = await import('@/services/nfc-service')
+      
+      // Stop HCE session
+      const currentSession = hceSessionRef.current
+      if (currentSession) {
+        try {
+          await stopHceOperation(currentSession)
+        } catch (e) {
+          console.error('Error stopping HCE:', e)
+        }
+        setHceSession(null)
+        hceSessionRef.current = null
+      }
+      
+      // Stop NFC reading
+      try {
+        await stopNfcReading()
+      } catch (e) {
+        console.error('Error stopping NFC reading:', e)
+      }
+      
+      console.log('✅ [Send] Process stopped successfully')
     } catch (error) {
+      console.error('❌ [Send] Stop error:', error)
+      // Force state reset even on error
       setIsSending(false)
       setIsNfcReading(false)
       setHceSession(null)
+      hceSessionRef.current = null
     }
   }
 
@@ -138,7 +201,15 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
       <View style={styles.backgroundBlur} />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.7}>
+        <TouchableOpacity 
+          onPress={async () => {
+            // Clean up before going back
+            await handleCancel()
+            onBack()
+          }} 
+          style={styles.backButton} 
+          activeOpacity={0.7}
+        >
           <Ionicons name="chevron-back" size={20} color="#f3f4f6" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Send Data</Text>
@@ -148,24 +219,49 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
       <View style={styles.content}>
         {!isSending ? (
           <>
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Enter string to send</Text>
-              <TextInput
-                style={styles.textInput}
-                value={dataToSend}
-                onChangeText={setDataToSend}
-                placeholder="Type your message here..."
-                placeholderTextColor="#9ca3af"
-                multiline
-                numberOfLines={4}
-                editable={!isSending}
-              />
+            <View style={styles.inputsContainer}>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>String 1</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={string1}
+                  onChangeText={setString1}
+                  placeholder="Enter string 1..."
+                  placeholderTextColor="#9ca3af"
+                  editable={!isSending}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>String 2</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={string2}
+                  onChangeText={setString2}
+                  placeholder="Enter string 2..."
+                  placeholderTextColor="#9ca3af"
+                  editable={!isSending}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>String 3 (Numbers Only)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={string3}
+                  onChangeText={setString3}
+                  placeholder="Enter numbers only..."
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="numeric"
+                  editable={!isSending}
+                />
+              </View>
             </View>
 
             <Button
               onPress={handleSend}
-              disabled={!dataToSend.trim() || !nfcSupported}
-              style={[styles.sendButton, (!dataToSend.trim() || !nfcSupported) && styles.disabledButton]}
+              disabled={!string1.trim() || !string2.trim() || !string3.trim() || !nfcSupported}
+              style={[styles.sendButton, (!string1.trim() || !string2.trim() || !string3.trim() || !nfcSupported) && styles.disabledButton]}
             >
               <Text style={styles.sendButtonText}>Send via NFC</Text>
             </Button>
@@ -194,11 +290,15 @@ export default function SendDataScreen({ onBack }: SendDataScreenProps) {
             <View style={styles.textContainer}>
               <Text style={styles.title}>Sending Data...</Text>
               <Text style={styles.subtitle}>Tap your phone near the receiving device</Text>
-              <Text style={styles.dataPreview}>Sending: "{dataToSend}"</Text>
+              <View style={styles.dataPreviewContainer}>
+                <Text style={styles.dataPreview}>String 1: "{string1}"</Text>
+                <Text style={styles.dataPreview}>String 2: "{string2}"</Text>
+                <Text style={styles.dataPreview}>String 3: "{string3}"</Text>
+              </View>
             </View>
 
             <Button onPress={handleCancel} style={styles.cancelButton}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>Stop Process</Text>
             </Button>
           </>
         )}
@@ -252,26 +352,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 24,
   },
+  inputsContainer: {
+    width: '100%',
+    gap: 16,
+  },
   inputContainer: {
     width: '100%',
-    gap: 12,
+    gap: 8,
   },
   inputLabel: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#f3f4f6',
   },
   textInput: {
     width: '100%',
-    minHeight: 120,
+    minHeight: 50,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     fontSize: 16,
     color: '#f3f4f6',
-    textAlignVertical: 'top',
   },
   sendButton: {
     width: '100%',
@@ -328,11 +431,15 @@ const styles = StyleSheet.create({
     color: '#d1d5db',
     textAlign: 'center',
   },
+  dataPreviewContainer: {
+    marginTop: 12,
+    gap: 8,
+    alignItems: 'center',
+  },
   dataPreview: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#a855f7',
     textAlign: 'center',
-    marginTop: 8,
     fontStyle: 'italic',
   },
   cancelButton: {

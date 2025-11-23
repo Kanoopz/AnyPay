@@ -151,16 +151,28 @@ export const handleReceive = async (
 };
 
 /**
- * Stop HCE operation
+ * Stop HCE operation - Force stop immediately
  */
 export const stopHceOperation = async (session: any | null): Promise<void> => {
   try {
     if (session) {
+      // Try multiple methods to ensure it's stopped
+      if (typeof session.setEnabled === 'function') {
       await session.setEnabled(false);
+      }
+      // Try to remove application if method exists
+      if (typeof session.setApplication === 'function') {
+        try {
+          session.setApplication(null);
+        } catch (e) {
+          // Ignore - might not be supported
+        }
+      }
       console.log('✅ HCE operation stopped');
     }
   } catch (error) {
     console.error('❌ Error stopping HCE:', error);
+    // Don't throw - best effort cleanup
   }
 };
 
@@ -197,7 +209,7 @@ export const handlePay = async (
     
     console.log('🔍 [NFC] Starting NFC read - trying Ndef technology...');
     try {
-      await NfcManager.requestTechnology(NfcTech.Ndef);
+    await NfcManager.requestTechnology(NfcTech.Ndef);
       console.log('✅ [NFC] Ndef technology requested successfully');
       tag = await NfcManager.getTag();
       console.log('📱 [NFC] Tag detected:', JSON.stringify(tag, null, 2));
@@ -336,8 +348,8 @@ export const handlePay = async (
 
     console.log(`📊 [NFC] Total records to process: ${records.length}`);
     
-    let receivedData = '';
-    let parsedData: ParsedData | undefined;
+      let receivedData = '';
+      let parsedData: ParsedData | undefined;
 
     // Process ALL records - try to extract data from ANY record, not just text records
     console.log('🔍 [NFC] Processing all records...');
@@ -363,13 +375,10 @@ export const handlePay = async (
             // Try multiple decoding strategies
             const payloadArray = new Uint8Array(payload);
             console.log(`   Payload array length: ${payloadArray.length}`);
-            console.log(`   Payload bytes: [${Array.from(payloadArray).join(', ')}]`);
+            console.log(`   Payload bytes: [${Array.from(payloadArray).slice(0, 50).join(', ')}${payloadArray.length > 50 ? '...' : ''}]`);
             
             // Strategy 1: Standard NDEF text record format
             // Format: [langCodeLength, ...langCode, ...text]
-            // First byte (bit 0-5) = language code length
-            // Next N bytes = language code (usually "en" = 2 bytes)
-            // Remaining bytes = actual text
             if (payloadArray.length > 0) {
               const firstByte = payloadArray[0];
               const langCodeLength = firstByte & 0x3F; // Lower 6 bits
@@ -379,7 +388,7 @@ export const handlePay = async (
               
               if (textStart < payloadArray.length) {
                 const textBytes = payloadArray.slice(textStart);
-                console.log(`   Text bytes: [${Array.from(textBytes).join(', ')}]`);
+                console.log(`   Text bytes: [${Array.from(textBytes).slice(0, 50).join(', ')}${textBytes.length > 50 ? '...' : ''}]`);
                 try {
                   text = new TextDecoder('utf-8', { fatal: false }).decode(textBytes);
                   if (text && text.trim().length > 0) {
@@ -387,16 +396,38 @@ export const handlePay = async (
                   }
                 } catch (e) {
                   console.log(`   ⚠️ UTF-8 decode failed, trying ASCII:`, e);
-                  // Fallback to ASCII
-                  text = String.fromCharCode(...Array.from(textBytes));
-                  console.log(`   ✅ Decoded (ASCII fallback): "${text}"`);
+                  try {
+                    text = String.fromCharCode(...Array.from(textBytes));
+                    if (text && text.trim().length > 0) {
+                      console.log(`   ✅ Decoded (ASCII fallback): "${text}"`);
+                    }
+                  } catch (asciiErr) {
+                    console.log(`   ⚠️ ASCII also failed:`, asciiErr);
+                  }
                 }
               } else {
                 console.log(`   ⚠️ Text start (${textStart}) >= payload length (${payloadArray.length})`);
               }
             }
             
-            // Strategy 2: Direct decode if first strategy failed or produced empty result
+            // Strategy 2: Try different starting positions (1, 2, 3 bytes)
+            if (!text || text.trim().length === 0) {
+              for (let skip = 1; skip <= 3 && skip < payloadArray.length; skip++) {
+                try {
+                  const textBytes = payloadArray.slice(skip);
+                  const decoded = new TextDecoder('utf-8', { fatal: false }).decode(textBytes);
+                  if (decoded && decoded.trim().length > 0 && /[\x20-\x7E]/.test(decoded)) {
+                    text = decoded;
+                    console.log(`   ✅ Decoded (skip ${skip} byte(s)): "${text}"`);
+                    break;
+                  }
+                } catch (e) {
+                  // Try next skip value
+                }
+              }
+            }
+            
+            // Strategy 3: Direct decode entire payload
             if (!text || text.trim().length === 0) {
               try {
                 text = new TextDecoder('utf-8', { fatal: false }).decode(payloadArray);
@@ -405,7 +436,6 @@ export const handlePay = async (
                 }
               } catch (e) {
                 console.log(`   ⚠️ Direct UTF-8 failed, trying ASCII:`, e);
-                // Try as ASCII
                 try {
                   text = String.fromCharCode(...Array.from(payloadArray));
                   if (text && text.trim().length > 0) {
@@ -417,16 +447,26 @@ export const handlePay = async (
               }
             }
             
-            // Strategy 3: Try from byte 1 if byte 0 is just a length indicator
-            if ((!text || text.trim().length === 0) && payloadArray.length > 1) {
+            // Strategy 4: Try to find printable characters anywhere in the array
+            if (!text || text.trim().length === 0) {
               try {
-                const textBytes = payloadArray.slice(1);
-                text = new TextDecoder('utf-8', { fatal: false }).decode(textBytes);
-                if (text && text.trim().length > 0) {
-                  console.log(`   ✅ Decoded (skip first byte): "${text}"`);
+                // Find first printable character (ASCII 32-126)
+                let startIdx = 0;
+                for (let i = 0; i < payloadArray.length; i++) {
+                  if (payloadArray[i] >= 32 && payloadArray[i] <= 126) {
+                    startIdx = i;
+                    break;
+                  }
+                }
+                if (startIdx < payloadArray.length) {
+                  const textBytes = payloadArray.slice(startIdx);
+                  text = new TextDecoder('utf-8', { fatal: false }).decode(textBytes);
+                  if (text && text.trim().length > 0) {
+                    console.log(`   ✅ Decoded (from printable start at ${startIdx}): "${text}"`);
+                  }
                 }
               } catch (e) {
-                console.log(`   ⚠️ Skip first byte decode failed:`, e);
+                console.log(`   ⚠️ Printable char search failed:`, e);
               }
             }
           } else if (typeof payload === 'string') {
@@ -445,31 +485,37 @@ export const handlePay = async (
           console.log(`   ⚠️ Error extracting from payload:`, e);
         }
 
-        if (text && text.trim()) {
+        // Accept text even if it has some non-printable chars, as long as it's not empty
+        if (text) {
           const trimmedText = text.trim();
-          console.log(`   📝 Extracted text: "${trimmedText}"`);
+          // Remove null bytes and other control chars but keep the text
+          const cleanedText = trimmedText.replace(/\0/g, '').trim();
           
-          // Try JSON first
-          try {
-            const jsonData = JSON.parse(trimmedText) as AddressData;
-            if (jsonData.address && jsonData.address.startsWith('0x')) {
-              receivedData = jsonData.address;
-              parsedData = {
-                data: jsonData.address,
-                address: jsonData.address,
-                desiredToken: jsonData.desiredToken,
-                desiredTokenAddress: jsonData.desiredTokenAddress,
-                timestamp: jsonData.timestamp,
-              };
-              console.log(`   ✅ Using JSON data:`, parsedData);
+          if (cleanedText.length > 0) {
+            console.log(`   📝 Extracted text: "${cleanedText}"`);
+            
+            // Try JSON first
+            try {
+              const jsonData = JSON.parse(cleanedText) as AddressData;
+              if (jsonData.address && jsonData.address.startsWith('0x')) {
+                receivedData = jsonData.address;
+                parsedData = {
+                  data: jsonData.address,
+                  address: jsonData.address,
+                  desiredToken: jsonData.desiredToken,
+                  desiredTokenAddress: jsonData.desiredTokenAddress,
+                  timestamp: jsonData.timestamp,
+                };
+                console.log(`   ✅ Using JSON data:`, parsedData);
+                break;
+              }
+            } catch (e) {
+              // Not JSON, use as plain text
+              receivedData = cleanedText;
+              parsedData = { data: receivedData };
+              console.log(`   ✅ Using plain text: "${receivedData}"`);
               break;
             }
-          } catch (e) {
-            // Not JSON, use as plain text
-            receivedData = trimmedText;
-            parsedData = { data: receivedData };
-            console.log(`   ✅ Using plain text: "${receivedData}"`);
-            break;
           }
         }
       }
@@ -477,10 +523,10 @@ export const handlePay = async (
       if (receivedData) break;
     }
 
-    // Clean up NFC
-    if (NfcManager && typeof NfcManager.cancelTechnologyRequest === 'function') {
-      await NfcManager.cancelTechnologyRequest();
-    }
+      // Clean up NFC
+      if (NfcManager && typeof NfcManager.cancelTechnologyRequest === 'function') {
+        await NfcManager.cancelTechnologyRequest();
+      }
 
     if (!receivedData) {
       const errorMsg = `No valid data found. Records: ${records.length}, NDEF: ${JSON.stringify(ndef, null, 2)}, Tag: ${JSON.stringify(tag, null, 2)}`;
@@ -505,18 +551,49 @@ export const handlePay = async (
 };
 
 /**
- * Stop NFC reading
+ * Stop NFC reading - Force stop immediately
  */
 export const stopNfcReading = async (): Promise<void> => {
   try {
-    if (!NfcManager || typeof NfcManager.cancelTechnologyRequest !== 'function') {
+    if (!NfcManager) {
       console.warn('⚠️ NFC Manager not available');
       return;
     }
+    
+    // Try to cancel technology request first (most important)
+    if (typeof NfcManager.cancelTechnologyRequest === 'function') {
+      try {
     await NfcManager.cancelTechnologyRequest();
-    console.log('✅ NFC reading stopped');
+        console.log('✅ NFC technology request cancelled');
+      } catch (e) {
+        console.error('Error cancelling technology request:', e);
+      }
+    }
+    
+    // Try to close any open connections
+    if (typeof NfcManager.close === 'function') {
+      try {
+        await NfcManager.close();
+        console.log('✅ NFC connection closed');
+      } catch (e) {
+        // Ignore - might not be connected
+      }
+    }
+    
+    // Also try to stop NFC manager completely
+    if (typeof NfcManager.stop === 'function') {
+      try {
+        await NfcManager.stop();
+        console.log('✅ NFC Manager stopped');
+      } catch (stopError) {
+        // Ignore stop errors - might already be stopped
+      }
+    }
+    
+    console.log('✅ NFC reading fully stopped');
   } catch (error) {
     console.error('❌ Error stopping NFC reading:', error);
+    // Don't throw - cleanup should be best effort
   }
 };
 
