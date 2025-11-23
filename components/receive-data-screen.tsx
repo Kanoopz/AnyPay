@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Alert, Platform } from 'react-native'
-import { Ionicons } from '@expo/vector-icons'
 import { Button } from '@/components/ui/button'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { stopHceOperation } from '@/services/nfc-service'
+import { Ionicons } from '@expo/vector-icons'
+import React, { useEffect, useState } from 'react'
+import { Alert, Animated, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 interface ReceiveDataScreenProps {
   onBack: () => void
